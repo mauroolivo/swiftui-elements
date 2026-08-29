@@ -1,8 +1,10 @@
 import SwiftUI
+import UIKit
 
+@MainActor
 struct ContentView: View {
-    @State private var count = 0
-    @State private var showsProbe = true
+    @State private var parentRevision = 0
+    @State private var showsCounter = true
 
     init() {
         LabLog.event("ContentView init")
@@ -12,25 +14,27 @@ struct ContentView: View {
         let _ = LabLog.event("ContentView body")
 
         VStack(alignment: .leading, spacing: 16) {
-            Text("SwiftUI Laboratory")
+            Text("Stage 1: Rendering Model")
                 .font(.title.bold())
 
-            Text("This screen is intentionally small. Its job is to make SwiftUI lifetime events visible in the console.")
+            Text("A SwiftUI View is a lightweight value description. Watch the console to compare View init/body with appear/disappear, @State lifetime, task lifetime, and an underlying UIKit view probe.")
                 .foregroundStyle(.secondary)
 
             Divider()
 
-            Text("Local @State count: \(count)")
+            Text("Parent revision: \(parentRevision)")
 
-            Button("Increment count") {
-                count += 1
-                LabLog.event("count changed to \(count)")
+            Button("Recompute parent") {
+                parentRevision += 1
+                LabLog.event("parentRevision changed to \(parentRevision)")
             }
 
-            Toggle("Show diagnostic child", isOn: $showsProbe)
+            RenderedUIViewProbe(label: "UIKit probe updated by revision \(parentRevision)")
 
-            if showsProbe {
-                DiagnosticChildView()
+            Toggle("Show counter child", isOn: $showsCounter)
+
+            if showsCounter {
+                CounterExperimentView(title: "Stable structural child")
             }
 
             Spacer()
@@ -45,53 +49,88 @@ struct ContentView: View {
     }
 }
 
-private struct DiagnosticChildView: View {
-    @State private var model = DiagnosticModel(name: "DiagnosticChildView model")
+private struct CounterExperimentView: View {
+    let title: String
 
-    init() {
-        LabLog.event("DiagnosticChildView init")
+    @State private var childCount = 0
+    @State private var model = LifetimeProbe(name: "CounterExperimentView model")
+
+    init(title: String) {
+        self.title = title
+        LabLog.event("CounterExperimentView init")
     }
 
     var body: some View {
-        let _ = LabLog.event("DiagnosticChildView body")
+        let _ = LabLog.event("CounterExperimentView body")
 
         VStack(alignment: .leading, spacing: 8) {
-            Text("Diagnostic child")
+            Text(title)
                 .font(.headline)
 
-            Text(model.description)
-                .font(.caption)
+            Text("Child @State count: \(childCount)")
+
+            Button("Increment child @State") {
+                childCount += 1
+                LabLog.event("childCount changed to \(childCount)")
+            }
+
+            Text("Model identity: \(model.idString)")
+                .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
         .onAppear {
-            LabLog.event("DiagnosticChildView onAppear")
+            LabLog.event("CounterExperimentView onAppear")
         }
         .onDisappear {
-            LabLog.event("DiagnosticChildView onDisappear")
+            LabLog.event("CounterExperimentView onDisappear")
         }
         .task {
             let taskID = UUID()
-            LabLog.event("DiagnosticChildView task started: \(taskID)")
+            LabLog.event("CounterExperimentView task started: \(taskID)")
 
             do {
                 try await Task.sleep(for: .seconds(60))
-                LabLog.event("DiagnosticChildView task completed: \(taskID)")
+                LabLog.event("CounterExperimentView task completed: \(taskID)")
             } catch {
-                LabLog.event("DiagnosticChildView task cancelled: \(taskID)")
+                LabLog.event("CounterExperimentView task cancelled: \(taskID)")
             }
         }
     }
 }
 
-private final class DiagnosticModel {
+private struct RenderedUIViewProbe: UIViewRepresentable {
+    let label: String
+
+    init(label: String) {
+        self.label = label
+        LabLog.event("RenderedUIViewProbe init")
+    }
+
+    func makeUIView(context: Context) -> UILabel {
+        LabLog.event("RenderedUIViewProbe makeUIView")
+
+        let label = UILabel()
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.textColor = .secondaryLabel
+        label.numberOfLines = 0
+        return label
+    }
+
+    func updateUIView(_ uiView: UILabel, context: Context) {
+        LabLog.event("RenderedUIViewProbe updateUIView")
+        uiView.text = label
+    }
+}
+
+private final class LifetimeProbe {
     private let name: String
     private let id = UUID()
 
-    var description: String {
-        "\(name): \(id.uuidString)"
+    var idString: String {
+        id.uuidString
     }
 
     init(name: String) {
