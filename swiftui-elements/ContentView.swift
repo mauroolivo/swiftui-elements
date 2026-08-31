@@ -3,9 +3,7 @@ import SwiftUI
 @MainActor
 struct ContentView: View {
     @State private var parentRevision = 0
-    @State private var usesAlternateBranch = false
-    @State private var explicitIdentity = UUID()
-    @State private var usesUnstableIdentity = false
+    @State private var draft = ItemDraft.sample
 
     init() {
         LabLog.event("ContentView init")
@@ -16,21 +14,31 @@ struct ContentView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Stage 2: Identity & Lifetime")
+                Text("Stage 3: Local State Ownership")
                     .font(.title.bold())
 
-                Text("Identity is SwiftUI's answer to: is this the same logical UI node as before? State, tasks, and view-owned models live as long as that identity lives.")
+                Text("Exercise B refactors the duplicated-state bug into one parent-owned source of truth. The editor receives a binding; the preview receives a read-only value plus an action closure.")
                     .foregroundStyle(.secondary)
 
                 Divider()
 
                 parentControls
+                ownershipQuestionCard
 
-                identityConceptCard
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Refactored component split")
+                        .font(.headline)
 
-                structuralIdentityExperiment
-                explicitIdentityExperiment
-                unstableIdentityExperiment
+                    Text("ContentView owns the draft. Children receive only the access they need.")
+                        .foregroundStyle(.secondary)
+
+                    ItemEditor(draft: $draft)
+                    ItemPreview(draft: draft) {
+                        draft.isFavorite.toggle()
+                        LabLog.event("ContentView handled preview favorite toggle; isFavorite is now \(draft.isFavorite)")
+                    }
+                }
+                .stageCard()
             }
             .padding()
         }
@@ -50,128 +58,136 @@ struct ContentView: View {
                 parentRevision += 1
                 LabLog.event("parentRevision changed to \(parentRevision)")
             }
+
+            Button("Reset parent-owned draft") {
+                draft = .sample
+                LabLog.event("ContentView reset parent-owned draft")
+            }
         }
         .stageCard()
     }
 
-    private var identityConceptCard: some View {
+    private var ownershipQuestionCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Working definition")
+            Text("Question")
                 .font(.headline)
 
-            Text("A view's identity is not the View struct instance. It is SwiftUI's internal match between yesterday's node and today's node in the rendered tree.")
-        }
-        .stageCard()
-    }
+            Text("Who owns the editable item draft: the parent, the editor, or the preview?")
 
-    private var structuralIdentityExperiment: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Experiment A: structural identity")
-                .font(.headline)
-
-            Text("Both branches create the same visual counter type, but they are different structural positions in the body tree.")
+            Text("In this refactored version, ContentView owns it. The editor can mutate through a binding. The preview can display it and emit actions, but does not own it.")
                 .foregroundStyle(.secondary)
-
-            Toggle("Use alternate branch", isOn: $usesAlternateBranch)
-
-            if usesAlternateBranch {
-                IdentityCounterView(name: "Branch TRUE counter")
-            } else {
-                IdentityCounterView(name: "Branch FALSE counter")
-            }
-        }
-        .stageCard()
-    }
-
-    private var explicitIdentityExperiment: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Experiment B: explicit .id")
-                .font(.headline)
-
-            Text("Changing .id tells SwiftUI: treat this as a different logical node, even though it is in the same structural position.")
-                .foregroundStyle(.secondary)
-
-            Button("Change explicit identity") {
-                explicitIdentity = UUID()
-                LabLog.event("explicitIdentity changed to \(explicitIdentity)")
-            }
-
-            IdentityCounterView(name: "Explicit .id counter")
-                .id(explicitIdentity)
-        }
-        .stageCard()
-    }
-
-    private var unstableIdentityExperiment: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Experiment C: unstable identity anti-pattern")
-                .font(.headline)
-
-            Text("When enabled, the counter gets .id(UUID()) during rendering. Every parent recomputation gives it a new identity and destroys its local state.")
-                .foregroundStyle(.secondary)
-
-            Toggle("Use unstable .id(UUID())", isOn: $usesUnstableIdentity)
-
-            if usesUnstableIdentity {
-                IdentityCounterView(name: "Unstable UUID counter")
-                    .id(UUID())
-            } else {
-                IdentityCounterView(name: "Stable structural counter")
-            }
         }
         .stageCard()
     }
 }
 
-private struct IdentityCounterView: View {
-    let name: String
+private struct ItemDraft: Equatable {
+    var title: String
+    var subtitle: String
+    var isFavorite: Bool
+    var priority: Int
 
-    @State private var count = 0
-    @State private var model: LifetimeProbe
+    static let sample = ItemDraft(
+        title: "SwiftUI Identity Field Notes",
+        subtitle: "State ownership is not automatic",
+        isFavorite: false,
+        priority: 2
+    )
+}
 
-    init(name: String) {
-        self.name = name
-        _model = State(initialValue: LifetimeProbe(name: "\(name) model"))
-        LabLog.event("\(name) init")
+private struct ItemEditor: View {
+    @Binding var draft: ItemDraft
+
+    init(draft: Binding<ItemDraft>) {
+        _draft = draft
+        LabLog.event("ItemEditor init")
     }
 
     var body: some View {
-        let _ = LabLog.event("\(name) body")
+        let _ = LabLog.event("ItemEditor body")
 
         VStack(alignment: .leading, spacing: 8) {
-            Text(name)
+            Text("Editor")
                 .font(.subheadline.bold())
 
-            Text("Local @State count: \(count)")
-
-            Text("Model identity: \(model.idString)")
-                .font(.caption.monospaced())
+            Text("Receives Binding<ItemDraft>; it does not own a private copy.")
+                .font(.caption)
                 .foregroundStyle(.secondary)
 
-            Button("Increment local state") {
-                count += 1
-                LabLog.event("\(name) count changed to \(count)")
+            TextField("Title", text: $draft.title)
+                .textFieldStyle(.roundedBorder)
+
+            TextField("Subtitle", text: $draft.subtitle)
+                .textFieldStyle(.roundedBorder)
+
+            Toggle("Favorite", isOn: $draft.isFavorite)
+
+            Stepper("Priority: \(draft.priority)", value: $draft.priority, in: 1...5)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .onAppear {
+            LabLog.event("ItemEditor onAppear")
+        }
+        .onDisappear {
+            LabLog.event("ItemEditor onDisappear")
+        }
+    }
+}
+
+private struct ItemPreview: View {
+    let draft: ItemDraft
+    let onToggleFavorite: () -> Void
+
+    init(draft: ItemDraft, onToggleFavorite: @escaping () -> Void) {
+        self.draft = draft
+        self.onToggleFavorite = onToggleFavorite
+        LabLog.event("ItemPreview init")
+    }
+
+    var body: some View {
+        let _ = LabLog.event("ItemPreview body")
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Preview")
+                .font(.subheadline.bold())
+
+            Text("Receives ItemDraft value; it does not own or mutate local draft state.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(draft.title)
+                    .font(.headline)
+
+                Text(draft.subtitle)
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    Label(draft.isFavorite ? "Favorite" : "Not favorite", systemImage: draft.isFavorite ? "star.fill" : "star")
+                    Spacer()
+                    Text("Priority \(draft.priority)")
+                }
+                .font(.caption)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.background, in: RoundedRectangle(cornerRadius: 10))
+
+            Button("Ask parent to toggle favorite") {
+                onToggleFavorite()
+                LabLog.event("ItemPreview emitted toggle favorite action")
             }
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
         .onAppear {
-            LabLog.event("\(name) onAppear")
+            LabLog.event("ItemPreview onAppear")
         }
         .onDisappear {
-            LabLog.event("\(name) onDisappear")
-        }
-        .task {
-            let taskID = UUID()
-            LabLog.event("\(name) task started: \(taskID)")
-
-            do {
-                try await Task.sleep(for: .seconds(60))
-                LabLog.event("\(name) task completed: \(taskID)")
-            } catch {
-                LabLog.event("\(name) task cancelled: \(taskID)")
-            }
+            LabLog.event("ItemPreview onDisappear")
         }
     }
 }
@@ -188,24 +204,6 @@ private struct StageCardModifier: ViewModifier {
 private extension View {
     func stageCard() -> some View {
         modifier(StageCardModifier())
-    }
-}
-
-private final class LifetimeProbe {
-    private let name: String
-    private let id = UUID()
-
-    var idString: String {
-        id.uuidString
-    }
-
-    init(name: String) {
-        self.name = name
-        LabLog.event("\(name) init: \(id)")
-    }
-
-    deinit {
-        LabLog.event("\(name) deinit: \(id)")
     }
 }
 
