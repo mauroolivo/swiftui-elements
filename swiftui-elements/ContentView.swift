@@ -3,7 +3,11 @@ import SwiftUI
 @MainActor
 struct ContentView: View {
     @State private var parentRevision = 0
-    @State private var model = FavoritesModel()
+    @State private var appUIState = AppUIState()
+    @State private var catalogModel = CatalogFeatureModel()
+    @State private var session = Session()
+    @State private var services = AppServices.live()
+    @State private var persistedLaunchCount = 1
 
     init() {
         LabLog.event("ContentView init")
@@ -14,21 +18,31 @@ struct ContentView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Stage 4: Observation")
+                Text("Stage 5: State vs Model vs Service")
                     .font(.title.bold())
 
-                Text("This exercise separates ownership from observation. ContentView owns one @Observable model in @State, while child views observe only the properties they actually read.")
+                Text("Exercise B refactors the giant observable object into smaller owners. The goal is not more files or more patterns; it is matching each piece of mutable state to an appropriate owner and lifetime.")
                     .foregroundStyle(.secondary)
 
                 Divider()
 
                 parentControls
-                observationQuestionCard
+                architectureQuestionCard
 
-                FavoriteSummaryView(model: model)
-                CatalogListView(model: model)
-                DraftEditorView(model: model)
-                DiagnosticsPanelView(model: model)
+                RefactoredStateInventoryView(
+                    appUIState: appUIState,
+                    catalogModel: catalogModel,
+                    session: session,
+                    services: services,
+                    persistedLaunchCount: persistedLaunchCount
+                )
+                SearchAndNavigationPanel(appUIState: appUIState, catalogModel: catalogModel)
+                CatalogFeaturePanel(model: catalogModel)
+                ProfilePanel(session: session, appUIState: appUIState, catalogModel: catalogModel)
+                DependencyPanel(services: services) {
+                    services = .mock()
+                    LabLog.event("ContentView replaced its dependency container")
+                }
             }
             .padding()
         }
@@ -49,26 +63,30 @@ struct ContentView: View {
                 LabLog.event("parentRevision changed to \(parentRevision)")
             }
 
-            Button("Replace observable model instance") {
-                model = FavoritesModel()
-                LabLog.event("ContentView replaced its @State-owned FavoritesModel")
+            Button("Reset app UI state only") {
+                appUIState.resetTransientState()
             }
 
-            Text("Changing parentRevision recreates transient View values, but keeps the same model instance. Replacing the model changes ownership/lifetime, not just observation.")
+            Button("Recreate catalog feature model") {
+                catalogModel = CatalogFeatureModel()
+                LabLog.event("ContentView recreated CatalogFeatureModel")
+            }
+
+            Text("These resets are now explicit. UI/navigation-like state, feature state, session state, persistence, and dependencies no longer have to share one lifetime.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .stageCard()
     }
 
-    private var observationQuestionCard: some View {
+    private var architectureQuestionCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Prediction")
                 .font(.headline)
 
-            Text("Before tapping a control, predict which child body logs will print. A view should invalidate when it reads the property that changed, not merely because the model object exists.")
+            Text("Before using the controls, predict which object should change: AppUIState, CatalogFeatureModel, Session, AppServices, or persistedLaunchCount.")
 
-            Text("@Observable makes the model observable. @State owns the model lifetime here. @Bindable is only used where a child needs bindings into editable model properties.")
+            Text("The important improvement is semantic: reset/logout behavior now expresses intent instead of replacing one unrelated bag of mutable properties.")
                 .foregroundStyle(.secondary)
         }
         .stageCard()
@@ -76,28 +94,50 @@ struct ContentView: View {
 }
 
 @Observable
-private final class FavoritesModel {
-    var items: [CatalogItem]
-    var favoriteIDs: Set<CatalogItem.ID>
-    var draftTitle: String
-    var draftNotes: String
-    var diagnosticsTick = 0
+private final class AppUIState {
+    var selectedTab: AppTab = .catalog
+    var catalogPath: [CatalogItem.ID] = []
+    var isShowingSettingsSheet = false
 
-    init(
-        items: [CatalogItem] = CatalogItem.samples,
-        favoriteIDs: Set<CatalogItem.ID> = [CatalogItem.samples[0].id],
-        draftTitle: String = "Observation field notes",
-        draftNotes: String = "Edit this text and watch which bodies evaluate."
-    ) {
-        self.items = items
-        self.favoriteIDs = favoriteIDs
-        self.draftTitle = draftTitle
-        self.draftNotes = draftNotes
-        LabLog.event("FavoritesModel init")
+    init() {
+        LabLog.event("AppUIState init")
     }
 
     deinit {
-        LabLog.event("FavoritesModel deinit")
+        LabLog.event("AppUIState deinit")
+    }
+
+    func openFirstItem(from items: [CatalogItem]) {
+        guard let firstItem = items.first else { return }
+        catalogPath.append(firstItem.id)
+        LabLog.event("AppUIState appended \(firstItem.id) to catalogPath")
+    }
+
+    func resetTransientState() {
+        selectedTab = .catalog
+        catalogPath.removeAll()
+        isShowingSettingsSheet = false
+        LabLog.event("AppUIState reset selected tab, path, and sheet state")
+    }
+}
+
+@Observable
+private final class CatalogFeatureModel {
+    var searchText = ""
+    var items: [CatalogItem]
+    var favoriteIDs: Set<CatalogItem.ID>
+
+    init(
+        items: [CatalogItem] = CatalogItem.samples,
+        favoriteIDs: Set<CatalogItem.ID> = [CatalogItem.samples[0].id]
+    ) {
+        self.items = items
+        self.favoriteIDs = favoriteIDs
+        LabLog.event("CatalogFeatureModel init")
+    }
+
+    deinit {
+        LabLog.event("CatalogFeatureModel deinit")
     }
 
     func toggleFavorite(_ item: CatalogItem) {
@@ -107,14 +147,61 @@ private final class FavoritesModel {
             favoriteIDs.insert(item.id)
         }
 
-        LabLog.event("FavoritesModel toggled favorite for \(item.title)")
+        LabLog.event("CatalogFeatureModel toggled favorite for \(item.title)")
     }
 
-    func resetDraft() {
-        draftTitle = "Observation field notes"
-        draftNotes = "Edit this text and watch which bodies evaluate."
-        LabLog.event("FavoritesModel reset draft fields")
+    func clearUserScopedState() {
+        searchText = ""
+        favoriteIDs.removeAll()
+        LabLog.event("CatalogFeatureModel cleared search text and favorites")
     }
+}
+
+@Observable
+private final class Session {
+    var profile: UserProfile?
+
+    init(profile: UserProfile? = .sample) {
+        self.profile = profile
+        LabLog.event("Session init")
+    }
+
+    deinit {
+        LabLog.event("Session deinit")
+    }
+
+    func signOut() {
+        profile = nil
+        LabLog.event("Session signed out")
+    }
+}
+
+private struct AppServices {
+    let networkClient: NetworkClient
+    let database: Database
+
+    static func live() -> AppServices {
+        AppServices(
+            networkClient: NetworkClient(name: "Live API"),
+            database: Database(name: "Catalog.sqlite")
+        )
+    }
+
+    static func mock() -> AppServices {
+        AppServices(
+            networkClient: NetworkClient(name: "Mock API \(Int.random(in: 100...999))"),
+            database: Database(name: "InMemory.sqlite")
+        )
+    }
+}
+
+private enum AppTab: String, CaseIterable, Identifiable, Hashable {
+    case home = "Home"
+    case catalog = "Catalog"
+    case favorites = "Favorites"
+    case profile = "Profile"
+
+    var id: Self { self }
 }
 
 private struct CatalogItem: Identifiable, Equatable {
@@ -129,25 +216,81 @@ private struct CatalogItem: Identifiable, Equatable {
     ]
 }
 
-private struct FavoriteSummaryView: View {
-    let model: FavoritesModel
+private struct UserProfile: Equatable {
+    var displayName: String
+    var isSignedIn: Bool
 
-    init(model: FavoritesModel) {
-        self.model = model
-        LabLog.event("FavoriteSummaryView init")
+    static let sample = UserProfile(displayName: "Mauro", isSignedIn: true)
+    static let signedOut = UserProfile(displayName: "Guest", isSignedIn: false)
+}
+
+private final class NetworkClient {
+    let name: String
+
+    init(name: String) {
+        self.name = name
+        LabLog.event("NetworkClient init: \(name)")
+    }
+
+    deinit {
+        LabLog.event("NetworkClient deinit: \(name)")
+    }
+}
+
+private final class Database {
+    let name: String
+
+    init(name: String) {
+        self.name = name
+        LabLog.event("Database init: \(name)")
+    }
+
+    deinit {
+        LabLog.event("Database deinit: \(name)")
+    }
+}
+
+private struct RefactoredStateInventoryView: View {
+    let appUIState: AppUIState
+    let catalogModel: CatalogFeatureModel
+    let session: Session
+    let services: AppServices
+    let persistedLaunchCount: Int
+
+    init(
+        appUIState: AppUIState,
+        catalogModel: CatalogFeatureModel,
+        session: Session,
+        services: AppServices,
+        persistedLaunchCount: Int
+    ) {
+        self.appUIState = appUIState
+        self.catalogModel = catalogModel
+        self.session = session
+        self.services = services
+        self.persistedLaunchCount = persistedLaunchCount
+        LabLog.event("RefactoredStateInventoryView init")
     }
 
     var body: some View {
-        let _ = LabLog.event("FavoriteSummaryView body")
+        let _ = LabLog.event("RefactoredStateInventoryView body")
 
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Favorite summary")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Responsibilities are now separated")
                 .font(.headline)
 
-            Text("Favorites: \(model.favoriteIDs.count)")
-                .font(.title3)
+            StateCategoryRow(owner: "AppUIState", name: "selectedTab", currentValue: appUIState.selectedTab.rawValue, category: "Application UI state")
+            StateCategoryRow(owner: "AppUIState", name: "catalogPath", currentValue: "\(appUIState.catalogPath.count) route value(s)", category: "Navigation-like state")
+            StateCategoryRow(owner: "AppUIState", name: "isShowingSettingsSheet", currentValue: appUIState.isShowingSettingsSheet ? "true" : "false", category: "Presentation state")
+            StateCategoryRow(owner: "CatalogFeatureModel", name: "searchText", currentValue: catalogModel.searchText.isEmpty ? "empty" : catalogModel.searchText, category: "Feature UI state")
+            StateCategoryRow(owner: "CatalogFeatureModel", name: "items", currentValue: "\(catalogModel.items.count) item(s)", category: "Domain/cache state")
+            StateCategoryRow(owner: "CatalogFeatureModel", name: "favoriteIDs", currentValue: "\(catalogModel.favoriteIDs.count) favorite(s)", category: "Feature/domain state")
+            StateCategoryRow(owner: "Session", name: "profile", currentValue: session.profile?.displayName ?? "signed out", category: "Session/domain state")
+            StateCategoryRow(owner: "AppServices", name: "networkClient", currentValue: services.networkClient.name, category: "Service/dependency")
+            StateCategoryRow(owner: "AppServices", name: "database", currentValue: services.database.name, category: "Persistence dependency")
+            StateCategoryRow(owner: "ContentView @State", name: "persistedLaunchCount", currentValue: "\(persistedLaunchCount)", category: "Persistent-state placeholder")
 
-            Text("This view reads favoriteIDs, but not draftTitle, draftNotes, or diagnosticsTick.")
+            Text("This inventory still reads many properties for teaching purposes, but the real state owners now have narrower responsibilities and different reset behavior.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -155,19 +298,96 @@ private struct FavoriteSummaryView: View {
     }
 }
 
-private struct CatalogListView: View {
-    let model: FavoritesModel
+private struct StateCategoryRow: View {
+    let owner: String
+    let name: String
+    let currentValue: String
+    let category: String
 
-    init(model: FavoritesModel) {
-        self.model = model
-        LabLog.event("CatalogListView init")
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(owner).\(name)")
+                    .font(.subheadline.bold())
+
+                Spacer()
+
+                Text(category)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(currentValue)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct SearchAndNavigationPanel: View {
+    @Bindable var appUIState: AppUIState
+    @Bindable var catalogModel: CatalogFeatureModel
+
+    init(appUIState: AppUIState, catalogModel: CatalogFeatureModel) {
+        self.appUIState = appUIState
+        self.catalogModel = catalogModel
+        LabLog.event("SearchAndNavigationPanel init")
     }
 
     var body: some View {
-        let _ = LabLog.event("CatalogListView body")
+        let _ = LabLog.event("SearchAndNavigationPanel body")
 
         VStack(alignment: .leading, spacing: 12) {
-            Text("Catalog rows")
+            Text("UI + navigation-like state")
+                .font(.headline)
+
+            Picker("Selected tab", selection: $appUIState.selectedTab) {
+                ForEach(AppTab.allCases) { tab in
+                    Text(tab.rawValue).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            TextField("Catalog search text", text: $catalogModel.searchText)
+                .textFieldStyle(.roundedBorder)
+
+            HStack {
+                Button("Append item route") {
+                    appUIState.openFirstItem(from: catalogModel.items)
+                }
+
+                Button("Clear path") {
+                    appUIState.catalogPath.removeAll()
+                    LabLog.event("AppUIState cleared catalogPath")
+                }
+            }
+
+            Text("Path count: \(appUIState.catalogPath.count)")
+
+            Toggle("Pretend settings sheet is presented", isOn: $appUIState.isShowingSettingsSheet)
+
+            Text("Search text moved to the catalog feature; tab/path/sheet state stayed in AppUIState. They can now reset independently.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .stageCard()
+    }
+}
+
+private struct CatalogFeaturePanel: View {
+    let model: CatalogFeatureModel
+
+    init(model: CatalogFeatureModel) {
+        self.model = model
+        LabLog.event("CatalogFeaturePanel init")
+    }
+
+    var body: some View {
+        let _ = LabLog.event("CatalogFeaturePanel body")
+
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Catalog feature state")
                 .font(.headline)
 
             ForEach(model.items) { item in
@@ -198,7 +418,7 @@ private struct CatalogListView: View {
                 }
             }
 
-            Text("This view reads items and favoriteIDs because row identity/content and star state depend on them.")
+            Text("CatalogFeatureModel owns catalog-specific mutable state. It does not know about tabs, sheets, sessions, databases, or network clients yet.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -206,63 +426,69 @@ private struct CatalogListView: View {
     }
 }
 
-private struct DraftEditorView: View {
-    @Bindable var model: FavoritesModel
+private struct ProfilePanel: View {
+    let session: Session
+    let appUIState: AppUIState
+    let catalogModel: CatalogFeatureModel
 
-    init(model: FavoritesModel) {
-        self.model = model
-        LabLog.event("DraftEditorView init")
+    init(session: Session, appUIState: AppUIState, catalogModel: CatalogFeatureModel) {
+        self.session = session
+        self.appUIState = appUIState
+        self.catalogModel = catalogModel
+        LabLog.event("ProfilePanel init")
     }
 
     var body: some View {
-        let _ = LabLog.event("DraftEditorView body")
+        let _ = LabLog.event("ProfilePanel body")
 
         VStack(alignment: .leading, spacing: 8) {
-            Text("Editable draft")
+            Text("Session/domain state")
                 .font(.headline)
 
-            Text("@Bindable projects bindings into an @Observable model. It does not create or own the model.")
-                .font(.caption)
+            Label(session.profile?.displayName ?? "Guest", systemImage: session.profile == nil ? "person.crop.circle" : "person.crop.circle.fill")
+
+            Text(session.profile == nil ? "Signed out" : "Signed in")
                 .foregroundStyle(.secondary)
 
-            TextField("Title", text: $model.draftTitle)
-                .textFieldStyle(.roundedBorder)
-
-            TextField("Notes", text: $model.draftNotes, axis: .vertical)
-                .lineLimit(2...4)
-                .textFieldStyle(.roundedBorder)
-
-            Button("Reset draft fields") {
-                model.resetDraft()
+            Button("Logout with explicit reset policy") {
+                session.signOut()
+                appUIState.resetTransientState()
+                catalogModel.clearUserScopedState()
             }
+
+            Text("This logout policy clears session-owned identity, app UI/navigation-like state, search text, and user-scoped favorites. It deliberately keeps item cache and services alive.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .stageCard()
     }
 }
 
-private struct DiagnosticsPanelView: View {
-    let model: FavoritesModel
+private struct DependencyPanel: View {
+    let services: AppServices
+    let onSwapDependencies: () -> Void
 
-    init(model: FavoritesModel) {
-        self.model = model
-        LabLog.event("DiagnosticsPanelView init")
+    init(services: AppServices, onSwapDependencies: @escaping () -> Void) {
+        self.services = services
+        self.onSwapDependencies = onSwapDependencies
+        LabLog.event("DependencyPanel init")
     }
 
     var body: some View {
-        let _ = LabLog.event("DiagnosticsPanelView body")
+        let _ = LabLog.event("DependencyPanel body")
 
         VStack(alignment: .leading, spacing: 8) {
-            Text("Diagnostics-only property")
+            Text("Services stored as model state")
                 .font(.headline)
 
-            Text("Tick: \(model.diagnosticsTick)")
+            Text("Network client: \(services.networkClient.name)")
+            Text("Database: \(services.database.name)")
 
-            Button("Increment diagnosticsTick") {
-                model.diagnosticsTick += 1
-                LabLog.event("FavoritesModel diagnosticsTick changed to \(model.diagnosticsTick)")
+            Button("Swap dependency container") {
+                onSwapDependencies()
             }
 
-            Text("Only this panel reads diagnosticsTick. Use it to test property-specific observation.")
+            Text("Services are dependencies owned at the composition boundary. They are not observable UI state, even if replacing the container is useful for previews/tests.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
