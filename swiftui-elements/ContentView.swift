@@ -3,7 +3,7 @@ import SwiftUI
 @MainActor
 struct ContentView: View {
     @State private var parentRevision = 0
-    @State private var draft = ItemDraft.sample
+    @State private var model = FavoritesModel()
 
     init() {
         LabLog.event("ContentView init")
@@ -14,31 +14,21 @@ struct ContentView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Stage 3: Local State Ownership")
+                Text("Stage 4: Observation")
                     .font(.title.bold())
 
-                Text("Exercise B refactors the duplicated-state bug into one parent-owned source of truth. The editor receives a binding; the preview receives a read-only value plus an action closure.")
+                Text("This exercise separates ownership from observation. ContentView owns one @Observable model in @State, while child views observe only the properties they actually read.")
                     .foregroundStyle(.secondary)
 
                 Divider()
 
                 parentControls
-                ownershipQuestionCard
+                observationQuestionCard
 
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Refactored component split")
-                        .font(.headline)
-
-                    Text("ContentView owns the draft. Children receive only the access they need.")
-                        .foregroundStyle(.secondary)
-
-                    ItemEditor(draft: $draft)
-                    ItemPreview(draft: draft) {
-                        draft.isFavorite.toggle()
-                        LabLog.event("ContentView handled preview favorite toggle; isFavorite is now \(draft.isFavorite)")
-                    }
-                }
-                .stageCard()
+                FavoriteSummaryView(model: model)
+                CatalogListView(model: model)
+                DraftEditorView(model: model)
+                DiagnosticsPanelView(model: model)
             }
             .padding()
         }
@@ -54,141 +44,229 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Parent revision: \(parentRevision)")
 
-            Button("Recompute parent") {
+            Button("Recompute parent view") {
                 parentRevision += 1
                 LabLog.event("parentRevision changed to \(parentRevision)")
             }
 
-            Button("Reset parent-owned draft") {
-                draft = .sample
-                LabLog.event("ContentView reset parent-owned draft")
+            Button("Replace observable model instance") {
+                model = FavoritesModel()
+                LabLog.event("ContentView replaced its @State-owned FavoritesModel")
             }
+
+            Text("Changing parentRevision recreates transient View values, but keeps the same model instance. Replacing the model changes ownership/lifetime, not just observation.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .stageCard()
     }
 
-    private var ownershipQuestionCard: some View {
+    private var observationQuestionCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Question")
+            Text("Prediction")
                 .font(.headline)
 
-            Text("Who owns the editable item draft: the parent, the editor, or the preview?")
+            Text("Before tapping a control, predict which child body logs will print. A view should invalidate when it reads the property that changed, not merely because the model object exists.")
 
-            Text("In this refactored version, ContentView owns it. The editor can mutate through a binding. The preview can display it and emit actions, but does not own it.")
+            Text("@Observable makes the model observable. @State owns the model lifetime here. @Bindable is only used where a child needs bindings into editable model properties.")
                 .foregroundStyle(.secondary)
         }
         .stageCard()
     }
 }
 
-private struct ItemDraft: Equatable {
+@Observable
+private final class FavoritesModel {
+    var items: [CatalogItem]
+    var favoriteIDs: Set<CatalogItem.ID>
+    var draftTitle: String
+    var draftNotes: String
+    var diagnosticsTick = 0
+
+    init(
+        items: [CatalogItem] = CatalogItem.samples,
+        favoriteIDs: Set<CatalogItem.ID> = [CatalogItem.samples[0].id],
+        draftTitle: String = "Observation field notes",
+        draftNotes: String = "Edit this text and watch which bodies evaluate."
+    ) {
+        self.items = items
+        self.favoriteIDs = favoriteIDs
+        self.draftTitle = draftTitle
+        self.draftNotes = draftNotes
+        LabLog.event("FavoritesModel init")
+    }
+
+    deinit {
+        LabLog.event("FavoritesModel deinit")
+    }
+
+    func toggleFavorite(_ item: CatalogItem) {
+        if favoriteIDs.contains(item.id) {
+            favoriteIDs.remove(item.id)
+        } else {
+            favoriteIDs.insert(item.id)
+        }
+
+        LabLog.event("FavoritesModel toggled favorite for \(item.title)")
+    }
+
+    func resetDraft() {
+        draftTitle = "Observation field notes"
+        draftNotes = "Edit this text and watch which bodies evaluate."
+        LabLog.event("FavoritesModel reset draft fields")
+    }
+}
+
+private struct CatalogItem: Identifiable, Equatable {
+    let id: String
     var title: String
     var subtitle: String
-    var isFavorite: Bool
-    var priority: Int
 
-    static let sample = ItemDraft(
-        title: "SwiftUI Identity Field Notes",
-        subtitle: "State ownership is not automatic",
-        isFavorite: false,
-        priority: 2
-    )
+    static let samples = [
+        CatalogItem(id: "identity", title: "Identity", subtitle: "What is the same view over time?"),
+        CatalogItem(id: "state", title: "State", subtitle: "Who owns the source of truth?"),
+        CatalogItem(id: "observation", title: "Observation", subtitle: "Which property did this body read?")
+    ]
 }
 
-private struct ItemEditor: View {
-    @Binding var draft: ItemDraft
+private struct FavoriteSummaryView: View {
+    let model: FavoritesModel
 
-    init(draft: Binding<ItemDraft>) {
-        _draft = draft
-        LabLog.event("ItemEditor init")
+    init(model: FavoritesModel) {
+        self.model = model
+        LabLog.event("FavoriteSummaryView init")
     }
 
     var body: some View {
-        let _ = LabLog.event("ItemEditor body")
+        let _ = LabLog.event("FavoriteSummaryView body")
 
         VStack(alignment: .leading, spacing: 8) {
-            Text("Editor")
-                .font(.subheadline.bold())
+            Text("Favorite summary")
+                .font(.headline)
 
-            Text("Receives Binding<ItemDraft>; it does not own a private copy.")
+            Text("Favorites: \(model.favoriteIDs.count)")
+                .font(.title3)
+
+            Text("This view reads favoriteIDs, but not draftTitle, draftNotes, or diagnosticsTick.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-
-            TextField("Title", text: $draft.title)
-                .textFieldStyle(.roundedBorder)
-
-            TextField("Subtitle", text: $draft.subtitle)
-                .textFieldStyle(.roundedBorder)
-
-            Toggle("Favorite", isOn: $draft.isFavorite)
-
-            Stepper("Priority: \(draft.priority)", value: $draft.priority, in: 1...5)
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .onAppear {
-            LabLog.event("ItemEditor onAppear")
-        }
-        .onDisappear {
-            LabLog.event("ItemEditor onDisappear")
-        }
+        .stageCard()
     }
 }
 
-private struct ItemPreview: View {
-    let draft: ItemDraft
-    let onToggleFavorite: () -> Void
+private struct CatalogListView: View {
+    let model: FavoritesModel
 
-    init(draft: ItemDraft, onToggleFavorite: @escaping () -> Void) {
-        self.draft = draft
-        self.onToggleFavorite = onToggleFavorite
-        LabLog.event("ItemPreview init")
+    init(model: FavoritesModel) {
+        self.model = model
+        LabLog.event("CatalogListView init")
     }
 
     var body: some View {
-        let _ = LabLog.event("ItemPreview body")
+        let _ = LabLog.event("CatalogListView body")
 
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Preview")
-                .font(.subheadline.bold())
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Catalog rows")
+                .font(.headline)
 
-            Text("Receives ItemDraft value; it does not own or mutate local draft state.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            ForEach(model.items) { item in
+                Button {
+                    model.toggleFavorite(item)
+                } label: {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item.title)
+                                .font(.subheadline.bold())
+                            Text(item.subtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(draft.title)
-                    .font(.headline)
+                        Spacer()
 
-                Text(draft.subtitle)
-                    .foregroundStyle(.secondary)
-
-                HStack {
-                    Label(draft.isFavorite ? "Favorite" : "Not favorite", systemImage: draft.isFavorite ? "star.fill" : "star")
-                    Spacer()
-                    Text("Priority \(draft.priority)")
+                        Image(systemName: model.favoriteIDs.contains(item.id) ? "star.fill" : "star")
+                            .foregroundStyle(.yellow)
+                            .accessibilityLabel(model.favoriteIDs.contains(item.id) ? "Favorite" : "Not favorite")
+                    }
+                    .contentShape(Rectangle())
                 }
-                .font(.caption)
-            }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.background, in: RoundedRectangle(cornerRadius: 10))
+                .buttonStyle(.plain)
 
-            Button("Ask parent to toggle favorite") {
-                onToggleFavorite()
-                LabLog.event("ItemPreview emitted toggle favorite action")
+                if item.id != model.items.last?.id {
+                    Divider()
+                }
+            }
+
+            Text("This view reads items and favoriteIDs because row identity/content and star state depend on them.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .stageCard()
+    }
+}
+
+private struct DraftEditorView: View {
+    @Bindable var model: FavoritesModel
+
+    init(model: FavoritesModel) {
+        self.model = model
+        LabLog.event("DraftEditorView init")
+    }
+
+    var body: some View {
+        let _ = LabLog.event("DraftEditorView body")
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Editable draft")
+                .font(.headline)
+
+            Text("@Bindable projects bindings into an @Observable model. It does not create or own the model.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            TextField("Title", text: $model.draftTitle)
+                .textFieldStyle(.roundedBorder)
+
+            TextField("Notes", text: $model.draftNotes, axis: .vertical)
+                .lineLimit(2...4)
+                .textFieldStyle(.roundedBorder)
+
+            Button("Reset draft fields") {
+                model.resetDraft()
             }
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .onAppear {
-            LabLog.event("ItemPreview onAppear")
+        .stageCard()
+    }
+}
+
+private struct DiagnosticsPanelView: View {
+    let model: FavoritesModel
+
+    init(model: FavoritesModel) {
+        self.model = model
+        LabLog.event("DiagnosticsPanelView init")
+    }
+
+    var body: some View {
+        let _ = LabLog.event("DiagnosticsPanelView body")
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Diagnostics-only property")
+                .font(.headline)
+
+            Text("Tick: \(model.diagnosticsTick)")
+
+            Button("Increment diagnosticsTick") {
+                model.diagnosticsTick += 1
+                LabLog.event("FavoritesModel diagnosticsTick changed to \(model.diagnosticsTick)")
+            }
+
+            Text("Only this panel reads diagnosticsTick. Use it to test property-specific observation.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
-        .onDisappear {
-            LabLog.event("ItemPreview onDisappear")
-        }
+        .stageCard()
     }
 }
 
