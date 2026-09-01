@@ -4,6 +4,9 @@ import SwiftUI
 
 @main
 struct swiftui_elementsApp: App {
+    @State private var appUIState = AppUIState()
+    @State private var session = Session()
+
     private let itemRepository: any ItemRepository = LiveItemRepository()
 
     init() {
@@ -13,6 +16,8 @@ struct swiftui_elementsApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(appUIState)
+                .environment(session)
                 .environment(\.itemRepository, itemRepository)
         }
     }

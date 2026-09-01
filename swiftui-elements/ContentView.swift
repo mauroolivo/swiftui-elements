@@ -2,11 +2,8 @@ import SwiftUI
 
 @MainActor
 struct ContentView: View {
-    @State private var parentRevision = 0
-    @State private var appUIState = AppUIState()
+    @State private var contentRevision = 0
     @State private var catalogModel = CatalogFeatureModel()
-    @State private var session = Session()
-    @State private var persistedLaunchCount = 1
 
     init() {
         LabLog.event("ContentView init")
@@ -17,34 +14,43 @@ struct ContentView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Stage 6: Environment + Dependency Injection")
+                Text("Stage 7: Application-wide State")
                     .font(.title.bold())
 
-                Text("Stage 5 separated state from services. Stage 6 now changes how services are provided: child views resolve dependencies from the SwiftUI environment instead of receiving every service through initializer plumbing.")
+                Text("Stage 6 used environment for services. Stage 7 now adds carefully chosen app-wide observable state: session and app UI state live at the App composition boundary, while catalog feature state stays feature-owned.")
                     .foregroundStyle(.secondary)
 
                 Divider()
 
-                parentControls
-                environmentQuestionCard
+                predictionCard
 
-                DependencyInjectionInventoryView(
-                    appUIState: appUIState,
+                ApplicationStateInventoryView(
                     catalogModel: catalogModel,
-                    session: session,
-                    persistedLaunchCount: persistedLaunchCount
+                    contentRevision: contentRevision
                 )
 
-                SearchAndNavigationPanel(appUIState: appUIState, catalogModel: catalogModel)
+                ApplicationStateControls(
+                    catalogModel: catalogModel,
+                    onRecomputeContentView: {
+                        contentRevision += 1
+                        LabLog.event("contentRevision changed to \(contentRevision)")
+                    },
+                    onRecreateCatalogModel: {
+                        catalogModel = CatalogFeatureModel()
+                        LabLog.event("ContentView recreated CatalogFeatureModel")
+                    }
+                )
+
+                SearchAndNavigationPanel(catalogModel: catalogModel)
                 CatalogFeaturePanel(model: catalogModel)
-                ProfilePanel(session: session, appUIState: appUIState, catalogModel: catalogModel)
+                ProfilePanel(catalogModel: catalogModel)
 
                 RepositoryAccessPanel(
-                    title: "Repository resolved from app root",
-                    explanation: "This panel does not receive a repository in its initializer. It reads the ItemRepository dependency from @Environment, where the app root injects the live implementation."
+                    title: "Repository still comes from dependency environment",
+                    explanation: "This is Stage 6's service dependency. It is not app-wide mutable UI state; it is contextual infrastructure supplied by the app root."
                 )
 
-                FeatureOverrideDemoView()
+                AppWideStateOverrideDemoView()
             }
             .padding()
         }
@@ -56,39 +62,14 @@ struct ContentView: View {
         }
     }
 
-    private var parentControls: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Parent revision: \(parentRevision)")
-
-            Button("Recompute parent view") {
-                parentRevision += 1
-                LabLog.event("parentRevision changed to \(parentRevision)")
-            }
-
-            Button("Reset app UI state only") {
-                appUIState.resetTransientState()
-            }
-
-            Button("Recreate catalog feature model") {
-                catalogModel = CatalogFeatureModel()
-                LabLog.event("ContentView recreated CatalogFeatureModel")
-            }
-
-            Text("The repository dependency is not reset by these controls because it is not owned by ContentView's feature state. It is supplied by the environment from a higher composition boundary.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .stageCard()
-    }
-
-    private var environmentQuestionCard: some View {
+    private var predictionCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Prediction")
                 .font(.headline)
 
-            Text("Before pressing the repository buttons, predict which implementation each panel will resolve: the app-root live repository or the feature-level preview override.")
+            Text("Before using the controls, predict which lifetime each value has: app, feature, view, or dependency.")
 
-            Text("Environment values flow downward. A closer override wins for that subtree, but sibling views keep using the value from their own environment chain.")
+            Text("Changing selectedTab or signing out should mutate app-wide state. Recreating the catalog feature model should not replace Session, AppUIState, or ItemRepository.")
                 .foregroundStyle(.secondary)
         }
         .stageCard()
@@ -96,10 +77,10 @@ struct ContentView: View {
 }
 
 @Observable
-private final class AppUIState {
+final class AppUIState {
     var selectedTab: AppTab = .catalog
-    var catalogPath: [CatalogItem.ID] = []
-    var isShowingSettingsSheet = false
+    var catalogPath: [CatalogRoute] = []
+    var presentedSheet: AppSheet?
 
     init() {
         LabLog.event("AppUIState init")
@@ -111,15 +92,46 @@ private final class AppUIState {
 
     func openFirstItem(from items: [CatalogItem]) {
         guard let firstItem = items.first else { return }
-        catalogPath.append(firstItem.id)
-        LabLog.event("AppUIState appended \(firstItem.id) to catalogPath")
+        catalogPath.append(.item(firstItem.id))
+        LabLog.event("AppUIState appended route for \(firstItem.id)")
     }
 
     func resetTransientState() {
         selectedTab = .catalog
         catalogPath.removeAll()
-        isShowingSettingsSheet = false
+        presentedSheet = nil
         LabLog.event("AppUIState reset selected tab, path, and sheet state")
+    }
+
+    func resetForLogout() {
+        selectedTab = .home
+        catalogPath.removeAll()
+        presentedSheet = nil
+        LabLog.event("AppUIState reset app navigation and presentation for logout")
+    }
+}
+
+@Observable
+final class Session {
+    var profile: UserProfile?
+
+    init(profile: UserProfile? = .sample) {
+        self.profile = profile
+        LabLog.event("Session init")
+    }
+
+    deinit {
+        LabLog.event("Session deinit")
+    }
+
+    func signInSampleUser() {
+        profile = .sample
+        LabLog.event("Session signed in sample user")
+    }
+
+    func signOut() {
+        profile = nil
+        LabLog.event("Session signed out")
     }
 }
 
@@ -156,25 +168,6 @@ private final class CatalogFeatureModel {
         searchText = ""
         favoriteIDs.removeAll()
         LabLog.event("CatalogFeatureModel cleared search text and favorites")
-    }
-}
-
-@Observable
-private final class Session {
-    var profile: UserProfile?
-
-    init(profile: UserProfile? = .sample) {
-        self.profile = profile
-        LabLog.event("Session init")
-    }
-
-    deinit {
-        LabLog.event("Session deinit")
-    }
-
-    func signOut() {
-        profile = nil
-        LabLog.event("Session signed out")
     }
 }
 
@@ -252,7 +245,7 @@ extension EnvironmentValues {
     }
 }
 
-private enum AppTab: String, CaseIterable, Identifiable, Hashable {
+enum AppTab: String, CaseIterable, Identifiable, Hashable {
     case home = "Home"
     case catalog = "Catalog"
     case favorites = "Favorites"
@@ -261,7 +254,17 @@ private enum AppTab: String, CaseIterable, Identifiable, Hashable {
     var id: Self { self }
 }
 
-struct CatalogItem: Identifiable, Equatable {
+enum CatalogRoute: Hashable {
+    case item(CatalogItem.ID)
+}
+
+enum AppSheet: String, Identifiable, Hashable {
+    case settings
+
+    var id: Self { self }
+}
+
+struct CatalogItem: Identifiable, Equatable, Hashable {
     let id: String
     var title: String
     var subtitle: String
@@ -278,11 +281,12 @@ struct CatalogItem: Identifiable, Equatable {
     ]
 }
 
-private struct UserProfile: Equatable {
+struct UserProfile: Equatable, Hashable {
     var displayName: String
     var isSignedIn: Bool
 
     static let sample = UserProfile(displayName: "Mauro", isSignedIn: true)
+    static let preview = UserProfile(displayName: "Preview User", isSignedIn: true)
 }
 
 private final class NetworkClient {
@@ -311,45 +315,38 @@ private final class Database {
     }
 }
 
-private struct DependencyInjectionInventoryView: View {
-    let appUIState: AppUIState
+private struct ApplicationStateInventoryView: View {
     let catalogModel: CatalogFeatureModel
-    let session: Session
-    let persistedLaunchCount: Int
+    let contentRevision: Int
 
+    @Environment(AppUIState.self) private var appUIState
+    @Environment(Session.self) private var session
     @Environment(\.itemRepository) private var itemRepository
 
-    init(
-        appUIState: AppUIState,
-        catalogModel: CatalogFeatureModel,
-        session: Session,
-        persistedLaunchCount: Int
-    ) {
-        self.appUIState = appUIState
+    init(catalogModel: CatalogFeatureModel, contentRevision: Int) {
         self.catalogModel = catalogModel
-        self.session = session
-        self.persistedLaunchCount = persistedLaunchCount
-        LabLog.event("DependencyInjectionInventoryView init")
+        self.contentRevision = contentRevision
+        LabLog.event("ApplicationStateInventoryView init")
     }
 
     var body: some View {
-        let _ = LabLog.event("DependencyInjectionInventoryView body")
+        let _ = LabLog.event("ApplicationStateInventoryView body")
 
         VStack(alignment: .leading, spacing: 12) {
-            Text("State is passed explicitly; services come from context")
+            Text("Application scope is intentionally small")
                 .font(.headline)
 
-            StateCategoryRow(owner: "AppUIState", name: "selectedTab", currentValue: appUIState.selectedTab.rawValue, category: "Application UI state")
-            StateCategoryRow(owner: "AppUIState", name: "catalogPath", currentValue: "\(appUIState.catalogPath.count) route value(s)", category: "Navigation-like state")
-            StateCategoryRow(owner: "AppUIState", name: "isShowingSettingsSheet", currentValue: appUIState.isShowingSettingsSheet ? "true" : "false", category: "Presentation state")
-            StateCategoryRow(owner: "CatalogFeatureModel", name: "searchText", currentValue: catalogModel.searchText.isEmpty ? "empty" : catalogModel.searchText, category: "Feature UI state")
-            StateCategoryRow(owner: "CatalogFeatureModel", name: "items", currentValue: "\(catalogModel.items.count) item(s)", category: "Domain/cache state")
-            StateCategoryRow(owner: "CatalogFeatureModel", name: "favoriteIDs", currentValue: "\(catalogModel.favoriteIDs.count) favorite(s)", category: "Feature/domain state")
-            StateCategoryRow(owner: "Session", name: "profile", currentValue: session.profile?.displayName ?? "signed out", category: "Session/domain state")
-            StateCategoryRow(owner: "Environment", name: "itemRepository", currentValue: itemRepository.diagnosticName, category: "Service/dependency")
-            StateCategoryRow(owner: "ContentView @State", name: "persistedLaunchCount", currentValue: "\(persistedLaunchCount)", category: "Persistent-state placeholder")
+            StateCategoryRow(owner: "App @State → Environment", name: "Session.profile", currentValue: session.profile?.displayName ?? "signed out", category: "Application/session state")
+            StateCategoryRow(owner: "App @State → Environment", name: "AppUIState.selectedTab", currentValue: appUIState.selectedTab.rawValue, category: "Application UI state")
+            StateCategoryRow(owner: "App @State → Environment", name: "AppUIState.catalogPath", currentValue: "\(appUIState.catalogPath.count) route value(s)", category: "Navigation state placeholder")
+            StateCategoryRow(owner: "App @State → Environment", name: "AppUIState.presentedSheet", currentValue: appUIState.presentedSheet?.rawValue ?? "none", category: "Presentation state placeholder")
+            StateCategoryRow(owner: "ContentView @State", name: "CatalogFeatureModel.searchText", currentValue: catalogModel.searchText.isEmpty ? "empty" : catalogModel.searchText, category: "Feature UI state")
+            StateCategoryRow(owner: "ContentView @State", name: "CatalogFeatureModel.items", currentValue: "\(catalogModel.items.count) item(s)", category: "Feature/domain cache")
+            StateCategoryRow(owner: "ContentView @State", name: "CatalogFeatureModel.favoriteIDs", currentValue: "\(catalogModel.favoriteIDs.count) favorite(s)", category: "User-scoped feature state")
+            StateCategoryRow(owner: "Environment", name: "ItemRepository", currentValue: itemRepository.diagnosticName, category: "Service dependency")
+            StateCategoryRow(owner: "ContentView @State", name: "contentRevision", currentValue: "\(contentRevision)", category: "Local lab view state")
 
-            Text("Notice the asymmetry: feature state is still explicit because ownership matters, while the repository is contextual because many descendants may need the same service dependency.")
+            Text("The app root now owns app-wide state. CatalogFeatureModel deliberately did not move there: a global AppState should not absorb every feature's mutable details.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -384,31 +381,89 @@ private struct StateCategoryRow: View {
     }
 }
 
-private struct SearchAndNavigationPanel: View {
-    @Bindable var appUIState: AppUIState
-    @Bindable var catalogModel: CatalogFeatureModel
+private struct ApplicationStateControls: View {
+    let catalogModel: CatalogFeatureModel
+    let onRecomputeContentView: () -> Void
+    let onRecreateCatalogModel: () -> Void
 
-    init(appUIState: AppUIState, catalogModel: CatalogFeatureModel) {
-        self.appUIState = appUIState
+    @Environment(AppUIState.self) private var appUIState
+    @Environment(Session.self) private var session
+
+    init(
+        catalogModel: CatalogFeatureModel,
+        onRecomputeContentView: @escaping () -> Void,
+        onRecreateCatalogModel: @escaping () -> Void
+    ) {
+        self.catalogModel = catalogModel
+        self.onRecomputeContentView = onRecomputeContentView
+        self.onRecreateCatalogModel = onRecreateCatalogModel
+        LabLog.event("ApplicationStateControls init")
+    }
+
+    var body: some View {
+        let _ = LabLog.event("ApplicationStateControls body")
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Lifetime controls")
+                .font(.headline)
+
+            Button("Recompute ContentView") {
+                onRecomputeContentView()
+            }
+
+            Button("Recreate catalog feature model") {
+                onRecreateCatalogModel()
+            }
+
+            Button("Reset app UI state only") {
+                appUIState.resetTransientState()
+            }
+
+            Button("Sign sample user back in") {
+                session.signInSampleUser()
+            }
+
+            Button("Logout with explicit app + feature reset policy") {
+                session.signOut()
+                appUIState.resetForLogout()
+                catalogModel.clearUserScopedState()
+            }
+
+            Text("Recreating feature state should not recreate Session, AppUIState, or ItemRepository. Logout is explicit: app/session state resets at app scope, while user-scoped catalog state resets at the feature boundary.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .stageCard()
+    }
+}
+
+private struct SearchAndNavigationPanel: View {
+    let catalogModel: CatalogFeatureModel
+
+    @Environment(AppUIState.self) private var appUIState
+
+    init(catalogModel: CatalogFeatureModel) {
         self.catalogModel = catalogModel
         LabLog.event("SearchAndNavigationPanel init")
     }
 
     var body: some View {
         let _ = LabLog.event("SearchAndNavigationPanel body")
+        @Bindable var editableAppUIState = appUIState
+        @Bindable var editableCatalogModel = catalogModel
 
         VStack(alignment: .leading, spacing: 12) {
-            Text("Initializer injection for owned state")
+            Text("App state + feature state in one UI")
                 .font(.headline)
 
-            Picker("Selected tab", selection: $appUIState.selectedTab) {
+            Picker("Selected tab", selection: $editableAppUIState.selectedTab) {
                 ForEach(AppTab.allCases) { tab in
                     Text(tab.rawValue).tag(tab)
                 }
             }
             .pickerStyle(.segmented)
 
-            TextField("Catalog search text", text: $catalogModel.searchText)
+            TextField("Catalog search text", text: $editableCatalogModel.searchText)
                 .textFieldStyle(.roundedBorder)
 
             HStack {
@@ -424,9 +479,15 @@ private struct SearchAndNavigationPanel: View {
 
             Text("Path count: \(appUIState.catalogPath.count)")
 
-            Toggle("Pretend settings sheet is presented", isOn: $appUIState.isShowingSettingsSheet)
+            Toggle("Pretend settings sheet is presented", isOn: Binding(
+                get: { appUIState.presentedSheet == .settings },
+                set: { isPresented in
+                    appUIState.presentedSheet = isPresented ? .settings : nil
+                    LabLog.event("AppUIState settings sheet flag changed to \(isPresented)")
+                }
+            ))
 
-            Text("These observable state owners are still initializer-injected because this view directly edits them. Environment injection would make ownership less obvious here, not clearer.")
+            Text("This view edits app-wide state and feature state, but those values still have different owners and reset rules.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -446,7 +507,7 @@ private struct CatalogFeaturePanel: View {
         let _ = LabLog.event("CatalogFeaturePanel body")
 
         VStack(alignment: .leading, spacing: 12) {
-            Text("Catalog feature state")
+            Text("Feature-owned catalog state")
                 .font(.headline)
 
             ForEach(model.items) { item in
@@ -477,7 +538,7 @@ private struct CatalogFeaturePanel: View {
                 }
             }
 
-            Text("CatalogFeatureModel still owns catalog-specific mutable state. The repository dependency can be accessed by subviews that need data loading without forcing this panel to receive or forward it.")
+            Text("Favorites are user-scoped feature state in this lab. They are cleared on logout by policy, not because the entire app model was replaced.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -486,13 +547,12 @@ private struct CatalogFeaturePanel: View {
 }
 
 private struct ProfilePanel: View {
-    let session: Session
-    let appUIState: AppUIState
     let catalogModel: CatalogFeatureModel
 
-    init(session: Session, appUIState: AppUIState, catalogModel: CatalogFeatureModel) {
-        self.session = session
-        self.appUIState = appUIState
+    @Environment(AppUIState.self) private var appUIState
+    @Environment(Session.self) private var session
+
+    init(catalogModel: CatalogFeatureModel) {
         self.catalogModel = catalogModel
         LabLog.event("ProfilePanel init")
     }
@@ -501,7 +561,7 @@ private struct ProfilePanel: View {
         let _ = LabLog.event("ProfilePanel body")
 
         VStack(alignment: .leading, spacing: 8) {
-            Text("Session/domain state")
+            Text("Session as app-wide state")
                 .font(.headline)
 
             Label(session.profile?.displayName ?? "Guest", systemImage: session.profile == nil ? "person.crop.circle" : "person.crop.circle.fill")
@@ -509,13 +569,13 @@ private struct ProfilePanel: View {
             Text(session.profile == nil ? "Signed out" : "Signed in")
                 .foregroundStyle(.secondary)
 
-            Button("Logout with explicit reset policy") {
+            Button("Logout from profile panel") {
                 session.signOut()
-                appUIState.resetTransientState()
+                appUIState.resetForLogout()
                 catalogModel.clearUserScopedState()
             }
 
-            Text("Logout still mutates explicit state owners. The repository dependency is not signed out here; a real app might instead give the repository an auth provider or rebuild a session-scoped dependency container at the composition boundary.")
+            Text("Session is app-wide because many features may need signed-in identity. That does not mean every feature model should also become app-wide.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -576,35 +636,79 @@ private struct RepositoryAccessPanel: View {
     }
 }
 
-private struct FeatureOverrideDemoView: View {
+private struct AppWideStateOverrideDemoView: View {
+    @State private var isolatedSession = Session(profile: .preview)
+
     init() {
-        LabLog.event("FeatureOverrideDemoView init")
+        LabLog.event("AppWideStateOverrideDemoView init")
     }
 
     var body: some View {
-        let _ = LabLog.event("FeatureOverrideDemoView body")
+        let _ = LabLog.event("AppWideStateOverrideDemoView body")
 
         VStack(alignment: .leading, spacing: 12) {
-            Text("Feature-level environment override")
+            Text("Scoped override for app-wide state")
                 .font(.headline)
 
-            Text("The parent app injects a live repository. This subtree overrides only itemRepository with a preview repository. This is the same mechanism previews, tests, and isolated features can use.")
+            Text("This subtree overrides Session with its own @State-owned instance. This is useful for previews and isolated flows, but it also shows why environment lookup is contextual rather than truly global.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
+            SessionStatusPanel(title: "Root session status before override")
+
+            SessionStatusPanel(title: "Session status inside override")
+                .environment(isolatedSession)
+
             RepositoryAccessPanel(
-                title: "Repository resolved from closer override",
-                explanation: "Only this subtree sees the preview repository. Views above or beside it keep resolving the app-root repository."
+                title: "Repository override still works independently",
+                explanation: "Overriding Session does not override ItemRepository. Environment keys and type-based observable values are independent channels."
             )
             .environment(
                 \.itemRepository,
                 PreviewItemRepository(
-                    name: "Feature override preview repository",
+                    name: "Stage 7 subtree preview repository",
                     items: CatalogItem.previewOverrideSamples
                 )
             )
         }
         .stageCard()
+    }
+}
+
+private struct SessionStatusPanel: View {
+    let title: String
+
+    @Environment(Session.self) private var session
+
+    init(title: String) {
+        self.title = title
+        LabLog.event("SessionStatusPanel init: \(title)")
+    }
+
+    var body: some View {
+        let _ = LabLog.event("SessionStatusPanel body: \(title)")
+
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.subheadline.bold())
+
+            Text("Resolved session: \(session.profile?.displayName ?? "signed out")")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                Button("Sign out this session") {
+                    session.signOut()
+                }
+
+                Button("Sign in sample") {
+                    session.signInSampleUser()
+                }
+            }
+            .font(.caption)
+        }
+        .padding()
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -629,12 +733,16 @@ enum LabLog {
     }
 }
 
-#Preview("App-root preview dependency") {
+#Preview("Stage 7 app state") {
     ContentView()
+        .environment(AppUIState())
+        .environment(Session())
         .environment(\.itemRepository, PreviewItemRepository())
 }
 
-#Preview("Test dependency") {
+#Preview("Signed out") {
     ContentView()
+        .environment(AppUIState())
+        .environment(Session(profile: nil))
         .environment(\.itemRepository, TestItemRepository())
 }
