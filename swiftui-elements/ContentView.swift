@@ -6,7 +6,6 @@ struct ContentView: View {
     @State private var appUIState = AppUIState()
     @State private var catalogModel = CatalogFeatureModel()
     @State private var session = Session()
-    @State private var services = AppServices.live()
     @State private var persistedLaunchCount = 1
 
     init() {
@@ -18,31 +17,34 @@ struct ContentView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Stage 5: State vs Model vs Service")
+                Text("Stage 6: Environment + Dependency Injection")
                     .font(.title.bold())
 
-                Text("Exercise B refactors the giant observable object into smaller owners. The goal is not more files or more patterns; it is matching each piece of mutable state to an appropriate owner and lifetime.")
+                Text("Stage 5 separated state from services. Stage 6 now changes how services are provided: child views resolve dependencies from the SwiftUI environment instead of receiving every service through initializer plumbing.")
                     .foregroundStyle(.secondary)
 
                 Divider()
 
                 parentControls
-                architectureQuestionCard
+                environmentQuestionCard
 
-                RefactoredStateInventoryView(
+                DependencyInjectionInventoryView(
                     appUIState: appUIState,
                     catalogModel: catalogModel,
                     session: session,
-                    services: services,
                     persistedLaunchCount: persistedLaunchCount
                 )
+
                 SearchAndNavigationPanel(appUIState: appUIState, catalogModel: catalogModel)
                 CatalogFeaturePanel(model: catalogModel)
                 ProfilePanel(session: session, appUIState: appUIState, catalogModel: catalogModel)
-                DependencyPanel(services: services) {
-                    services = .mock()
-                    LabLog.event("ContentView replaced its dependency container")
-                }
+
+                RepositoryAccessPanel(
+                    title: "Repository resolved from app root",
+                    explanation: "This panel does not receive a repository in its initializer. It reads the ItemRepository dependency from @Environment, where the app root injects the live implementation."
+                )
+
+                FeatureOverrideDemoView()
             }
             .padding()
         }
@@ -72,21 +74,21 @@ struct ContentView: View {
                 LabLog.event("ContentView recreated CatalogFeatureModel")
             }
 
-            Text("These resets are now explicit. UI/navigation-like state, feature state, session state, persistence, and dependencies no longer have to share one lifetime.")
+            Text("The repository dependency is not reset by these controls because it is not owned by ContentView's feature state. It is supplied by the environment from a higher composition boundary.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .stageCard()
     }
 
-    private var architectureQuestionCard: some View {
+    private var environmentQuestionCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Prediction")
                 .font(.headline)
 
-            Text("Before using the controls, predict which object should change: AppUIState, CatalogFeatureModel, Session, AppServices, or persistedLaunchCount.")
+            Text("Before pressing the repository buttons, predict which implementation each panel will resolve: the app-root live repository or the feature-level preview override.")
 
-            Text("The important improvement is semantic: reset/logout behavior now expresses intent instead of replacing one unrelated bag of mutable properties.")
+            Text("Environment values flow downward. A closer override wins for that subtree, but sibling views keep using the value from their own environment chain.")
                 .foregroundStyle(.secondary)
         }
         .stageCard()
@@ -176,22 +178,77 @@ private final class Session {
     }
 }
 
-private struct AppServices {
-    let networkClient: NetworkClient
-    let database: Database
+protocol ItemRepository {
+    var diagnosticName: String { get }
+    func featuredItems() async throws -> [CatalogItem]
+}
 
-    static func live() -> AppServices {
-        AppServices(
-            networkClient: NetworkClient(name: "Live API"),
-            database: Database(name: "Catalog.sqlite")
-        )
+final class LiveItemRepository: ItemRepository {
+    private let networkClient: NetworkClient
+    private let database: Database
+
+    init() {
+        self.networkClient = NetworkClient(name: "Live API")
+        self.database = Database(name: "Catalog.sqlite")
+        LabLog.event("LiveItemRepository init")
     }
 
-    static func mock() -> AppServices {
-        AppServices(
-            networkClient: NetworkClient(name: "Mock API \(Int.random(in: 100...999))"),
-            database: Database(name: "InMemory.sqlite")
-        )
+    deinit {
+        LabLog.event("LiveItemRepository deinit")
+    }
+
+    var diagnosticName: String {
+        "LiveItemRepository(network: \(networkClient.name), database: \(database.name))"
+    }
+
+    func featuredItems() async throws -> [CatalogItem] {
+        LabLog.event("LiveItemRepository featuredItems using \(networkClient.name) + \(database.name)")
+        return CatalogItem.samples
+    }
+}
+
+struct PreviewItemRepository: ItemRepository {
+    let diagnosticName: String
+    private let items: [CatalogItem]
+
+    init(name: String = "PreviewItemRepository", items: [CatalogItem] = CatalogItem.samples) {
+        self.diagnosticName = name
+        self.items = items
+        LabLog.event("PreviewItemRepository init: \(name)")
+    }
+
+    func featuredItems() async throws -> [CatalogItem] {
+        LabLog.event("PreviewItemRepository featuredItems: \(diagnosticName)")
+        return items
+    }
+}
+
+struct TestItemRepository: ItemRepository {
+    let diagnosticName: String
+    private let result: Result<[CatalogItem], Error>
+
+    init(
+        name: String = "TestItemRepository",
+        result: Result<[CatalogItem], Error> = .success(CatalogItem.samples)
+    ) {
+        self.diagnosticName = name
+        self.result = result
+    }
+
+    func featuredItems() async throws -> [CatalogItem] {
+        LabLog.event("TestItemRepository featuredItems: \(diagnosticName)")
+        return try result.get()
+    }
+}
+
+private struct ItemRepositoryEnvironmentKey: EnvironmentKey {
+    static let defaultValue: any ItemRepository = PreviewItemRepository(name: "Default fallback repository")
+}
+
+extension EnvironmentValues {
+    var itemRepository: any ItemRepository {
+        get { self[ItemRepositoryEnvironmentKey.self] }
+        set { self[ItemRepositoryEnvironmentKey.self] = newValue }
     }
 }
 
@@ -204,7 +261,7 @@ private enum AppTab: String, CaseIterable, Identifiable, Hashable {
     var id: Self { self }
 }
 
-private struct CatalogItem: Identifiable, Equatable {
+struct CatalogItem: Identifiable, Equatable {
     let id: String
     var title: String
     var subtitle: String
@@ -214,6 +271,11 @@ private struct CatalogItem: Identifiable, Equatable {
         CatalogItem(id: "state", title: "State", subtitle: "Who owns the source of truth?"),
         CatalogItem(id: "observation", title: "Observation", subtitle: "Which property did this body read?")
     ]
+
+    static let previewOverrideSamples = [
+        CatalogItem(id: "preview-a", title: "Preview A", subtitle: "Supplied by a closer environment override"),
+        CatalogItem(id: "preview-b", title: "Preview B", subtitle: "Sibling views do not see this repository")
+    ]
 }
 
 private struct UserProfile: Equatable {
@@ -221,7 +283,6 @@ private struct UserProfile: Equatable {
     var isSignedIn: Bool
 
     static let sample = UserProfile(displayName: "Mauro", isSignedIn: true)
-    static let signedOut = UserProfile(displayName: "Guest", isSignedIn: false)
 }
 
 private final class NetworkClient {
@@ -250,33 +311,32 @@ private final class Database {
     }
 }
 
-private struct RefactoredStateInventoryView: View {
+private struct DependencyInjectionInventoryView: View {
     let appUIState: AppUIState
     let catalogModel: CatalogFeatureModel
     let session: Session
-    let services: AppServices
     let persistedLaunchCount: Int
+
+    @Environment(\.itemRepository) private var itemRepository
 
     init(
         appUIState: AppUIState,
         catalogModel: CatalogFeatureModel,
         session: Session,
-        services: AppServices,
         persistedLaunchCount: Int
     ) {
         self.appUIState = appUIState
         self.catalogModel = catalogModel
         self.session = session
-        self.services = services
         self.persistedLaunchCount = persistedLaunchCount
-        LabLog.event("RefactoredStateInventoryView init")
+        LabLog.event("DependencyInjectionInventoryView init")
     }
 
     var body: some View {
-        let _ = LabLog.event("RefactoredStateInventoryView body")
+        let _ = LabLog.event("DependencyInjectionInventoryView body")
 
         VStack(alignment: .leading, spacing: 12) {
-            Text("Responsibilities are now separated")
+            Text("State is passed explicitly; services come from context")
                 .font(.headline)
 
             StateCategoryRow(owner: "AppUIState", name: "selectedTab", currentValue: appUIState.selectedTab.rawValue, category: "Application UI state")
@@ -286,11 +346,10 @@ private struct RefactoredStateInventoryView: View {
             StateCategoryRow(owner: "CatalogFeatureModel", name: "items", currentValue: "\(catalogModel.items.count) item(s)", category: "Domain/cache state")
             StateCategoryRow(owner: "CatalogFeatureModel", name: "favoriteIDs", currentValue: "\(catalogModel.favoriteIDs.count) favorite(s)", category: "Feature/domain state")
             StateCategoryRow(owner: "Session", name: "profile", currentValue: session.profile?.displayName ?? "signed out", category: "Session/domain state")
-            StateCategoryRow(owner: "AppServices", name: "networkClient", currentValue: services.networkClient.name, category: "Service/dependency")
-            StateCategoryRow(owner: "AppServices", name: "database", currentValue: services.database.name, category: "Persistence dependency")
+            StateCategoryRow(owner: "Environment", name: "itemRepository", currentValue: itemRepository.diagnosticName, category: "Service/dependency")
             StateCategoryRow(owner: "ContentView @State", name: "persistedLaunchCount", currentValue: "\(persistedLaunchCount)", category: "Persistent-state placeholder")
 
-            Text("This inventory still reads many properties for teaching purposes, but the real state owners now have narrower responsibilities and different reset behavior.")
+            Text("Notice the asymmetry: feature state is still explicit because ownership matters, while the repository is contextual because many descendants may need the same service dependency.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -339,7 +398,7 @@ private struct SearchAndNavigationPanel: View {
         let _ = LabLog.event("SearchAndNavigationPanel body")
 
         VStack(alignment: .leading, spacing: 12) {
-            Text("UI + navigation-like state")
+            Text("Initializer injection for owned state")
                 .font(.headline)
 
             Picker("Selected tab", selection: $appUIState.selectedTab) {
@@ -367,7 +426,7 @@ private struct SearchAndNavigationPanel: View {
 
             Toggle("Pretend settings sheet is presented", isOn: $appUIState.isShowingSettingsSheet)
 
-            Text("Search text moved to the catalog feature; tab/path/sheet state stayed in AppUIState. They can now reset independently.")
+            Text("These observable state owners are still initializer-injected because this view directly edits them. Environment injection would make ownership less obvious here, not clearer.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -418,7 +477,7 @@ private struct CatalogFeaturePanel: View {
                 }
             }
 
-            Text("CatalogFeatureModel owns catalog-specific mutable state. It does not know about tabs, sheets, sessions, databases, or network clients yet.")
+            Text("CatalogFeatureModel still owns catalog-specific mutable state. The repository dependency can be accessed by subviews that need data loading without forcing this panel to receive or forward it.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -456,7 +515,7 @@ private struct ProfilePanel: View {
                 catalogModel.clearUserScopedState()
             }
 
-            Text("This logout policy clears session-owned identity, app UI/navigation-like state, search text, and user-scoped favorites. It deliberately keeps item cache and services alive.")
+            Text("Logout still mutates explicit state owners. The repository dependency is not signed out here; a real app might instead give the repository an auth provider or rebuild a session-scoped dependency container at the composition boundary.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -464,33 +523,86 @@ private struct ProfilePanel: View {
     }
 }
 
-private struct DependencyPanel: View {
-    let services: AppServices
-    let onSwapDependencies: () -> Void
+private struct RepositoryAccessPanel: View {
+    let title: String
+    let explanation: String
 
-    init(services: AppServices, onSwapDependencies: @escaping () -> Void) {
-        self.services = services
-        self.onSwapDependencies = onSwapDependencies
-        LabLog.event("DependencyPanel init")
+    @Environment(\.itemRepository) private var itemRepository
+    @State private var loadSummary = "Not loaded yet"
+
+    init(title: String, explanation: String) {
+        self.title = title
+        self.explanation = explanation
+        LabLog.event("RepositoryAccessPanel init: \(title)")
     }
 
     var body: some View {
-        let _ = LabLog.event("DependencyPanel body")
+        let _ = LabLog.event("RepositoryAccessPanel body: \(title)")
 
         VStack(alignment: .leading, spacing: 8) {
-            Text("Services stored as model state")
+            Text(title)
                 .font(.headline)
 
-            Text("Network client: \(services.networkClient.name)")
-            Text("Database: \(services.database.name)")
-
-            Button("Swap dependency container") {
-                onSwapDependencies()
-            }
-
-            Text("Services are dependencies owned at the composition boundary. They are not observable UI state, even if replacing the container is useful for previews/tests.")
+            Text("Resolved dependency:")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            Text(itemRepository.diagnosticName)
+                .font(.subheadline.monospaced())
+
+            Button("Fetch featured items through environment") {
+                let repository = itemRepository
+
+                Task {
+                    do {
+                        let items = try await repository.featuredItems()
+                        loadSummary = "Loaded \(items.count) item(s): \(items.map(\.title).joined(separator: ", "))"
+                        LabLog.event("RepositoryAccessPanel loaded via \(repository.diagnosticName)")
+                    } catch {
+                        loadSummary = "Failed: \(error.localizedDescription)"
+                        LabLog.event("RepositoryAccessPanel failed via \(repository.diagnosticName): \(error.localizedDescription)")
+                    }
+                }
+            }
+
+            Text(loadSummary)
+                .font(.caption)
+
+            Text(explanation)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .stageCard()
+    }
+}
+
+private struct FeatureOverrideDemoView: View {
+    init() {
+        LabLog.event("FeatureOverrideDemoView init")
+    }
+
+    var body: some View {
+        let _ = LabLog.event("FeatureOverrideDemoView body")
+
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Feature-level environment override")
+                .font(.headline)
+
+            Text("The parent app injects a live repository. This subtree overrides only itemRepository with a preview repository. This is the same mechanism previews, tests, and isolated features can use.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            RepositoryAccessPanel(
+                title: "Repository resolved from closer override",
+                explanation: "Only this subtree sees the preview repository. Views above or beside it keep resolving the app-root repository."
+            )
+            .environment(
+                \.itemRepository,
+                PreviewItemRepository(
+                    name: "Feature override preview repository",
+                    items: CatalogItem.previewOverrideSamples
+                )
+            )
         }
         .stageCard()
     }
@@ -511,12 +623,18 @@ private extension View {
     }
 }
 
-private enum LabLog {
+enum LabLog {
     nonisolated static func event(_ message: String) {
         print("🧪 \(message)")
     }
 }
 
-#Preview {
+#Preview("App-root preview dependency") {
     ContentView()
+        .environment(\.itemRepository, PreviewItemRepository())
+}
+
+#Preview("Test dependency") {
+    ContentView()
+        .environment(\.itemRepository, TestItemRepository())
 }
