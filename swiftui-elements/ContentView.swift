@@ -2,77 +2,19 @@ import SwiftUI
 
 @MainActor
 struct ContentView: View {
-    @State private var contentRevision = 0
-    @State private var catalogModel = CatalogFeatureModel()
-
     init() {
         LabLog.event("ContentView init")
     }
-
+    
     var body: some View {
         let _ = LabLog.event("ContentView body")
-
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Stage 7: Application-wide State")
-                    .font(.title.bold())
-
-                Text("Stage 6 used environment for services. Stage 7 now adds carefully chosen app-wide observable state: session and app UI state live at the App composition boundary, while catalog feature state stays feature-owned.")
-                    .foregroundStyle(.secondary)
-
-                Divider()
-
-                predictionCard
-
-                ApplicationStateInventoryView(
-                    catalogModel: catalogModel,
-                    contentRevision: contentRevision
-                )
-
-                ApplicationStateControls(
-                    catalogModel: catalogModel,
-                    onRecomputeContentView: {
-                        contentRevision += 1
-                        LabLog.event("contentRevision changed to \(contentRevision)")
-                    },
-                    onRecreateCatalogModel: {
-                        catalogModel = CatalogFeatureModel()
-                        LabLog.event("ContentView recreated CatalogFeatureModel")
-                    }
-                )
-
-                SearchAndNavigationPanel(catalogModel: catalogModel)
-                CatalogFeaturePanel(model: catalogModel)
-                ProfilePanel(catalogModel: catalogModel)
-
-                RepositoryAccessPanel(
-                    title: "Repository still comes from dependency environment",
-                    explanation: "This is Stage 6's service dependency. It is not app-wide mutable UI state; it is contextual infrastructure supplied by the app root."
-                )
-
-                AppWideStateOverrideDemoView()
+        Stage9NavigationArchitectureView()
+            .onAppear {
+                LabLog.event("ContentView onAppear")
             }
-            .padding()
-        }
-        .onAppear {
-            LabLog.event("ContentView onAppear")
-        }
-        .onDisappear {
-            LabLog.event("ContentView onDisappear")
-        }
-    }
-
-    private var predictionCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Prediction")
-                .font(.headline)
-
-            Text("Before using the controls, predict which lifetime each value has: app, feature, view, or dependency.")
-
-            Text("Changing selectedTab or signing out should mutate app-wide state. Recreating the catalog feature model should not replace Session, AppUIState, or ItemRepository.")
-                .foregroundStyle(.secondary)
-        }
-        .stageCard()
+            .onDisappear {
+                LabLog.event("ContentView onDisappear")
+            }        
     }
 }
 
@@ -248,6 +190,7 @@ extension EnvironmentValues {
 enum AppTab: String, CaseIterable, Identifiable, Hashable {
     case home = "Home"
     case catalog = "Catalog"
+    case search = "Search"
     case favorites = "Favorites"
     case profile = "Profile"
 
@@ -733,8 +676,9 @@ enum LabLog {
     }
 }
 
-#Preview("Stage 7 app state") {
+#Preview("Stage 9 navigation architecture") {
     ContentView()
+        .environment(AppRouter())
         .environment(AppUIState())
         .environment(Session())
         .environment(\.itemRepository, PreviewItemRepository())
@@ -742,6 +686,7 @@ enum LabLog {
 
 #Preview("Signed out") {
     ContentView()
+        .environment(AppRouter())
         .environment(AppUIState())
         .environment(Session(profile: nil))
         .environment(\.itemRepository, TestItemRepository())
