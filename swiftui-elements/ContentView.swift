@@ -8,13 +8,13 @@ struct ContentView: View {
     
     var body: some View {
         let _ = LabLog.event("ContentView body")
-        Stage9NavigationArchitectureView()
+        Stage10ModalPresentationStateView()
             .onAppear {
                 LabLog.event("ContentView onAppear")
             }
             .onDisappear {
                 LabLog.event("ContentView onDisappear")
-            }        
+            }
     }
 }
 
@@ -676,7 +676,7 @@ enum LabLog {
     }
 }
 
-#Preview("Stage 9 navigation architecture") {
+#Preview("Stage 10 modal presentation as state") {
     ContentView()
         .environment(AppRouter())
         .environment(AppUIState())
