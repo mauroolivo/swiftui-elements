@@ -21,6 +21,9 @@ struct swiftui_elementsApp: App {
                 .environment(appUIState)
                 .environment(session)
                 .environment(\.itemRepository, itemRepository)
+                .onOpenURL { url in
+                    LabLog.event("swiftui_elementsApp received URL: \(url)")
+                }
         }
     }
 }

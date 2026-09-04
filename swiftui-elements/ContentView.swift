@@ -8,7 +8,7 @@ struct ContentView: View {
     
     var body: some View {
         let _ = LabLog.event("ContentView body")
-        Stage10ModalPresentationStateView()
+        Stage11DeepLinkingView()
             .onAppear {
                 LabLog.event("ContentView onAppear")
             }
@@ -664,7 +664,7 @@ private struct StageCardModifier: ViewModifier {
     }
 }
 
-private extension View {
+extension View {
     func stageCard() -> some View {
         modifier(StageCardModifier())
     }
@@ -676,7 +676,7 @@ enum LabLog {
     }
 }
 
-#Preview("Stage 10 modal presentation as state") {
+#Preview("Stage 11 deep linking") {
     ContentView()
         .environment(AppRouter())
         .environment(AppUIState())
