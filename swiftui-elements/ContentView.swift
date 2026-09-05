@@ -8,7 +8,7 @@ struct ContentView: View {
     
     var body: some View {
         let _ = LabLog.event("ContentView body")
-        Stage13ListProductionScaleView()
+        StagePickerView()
             .onAppear {
                 LabLog.event("ContentView onAppear")
             }
