@@ -7,14 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        let _ = LabLog.event("ContentView body")
-        StagePickerView()
-            .onAppear {
-                LabLog.event("ContentView onAppear")
-            }
-            .onDisappear {
-                LabLog.event("ContentView onDisappear")
-            }
+        Stage13ListProductionScaleView()
     }
 }
 
