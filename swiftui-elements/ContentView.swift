@@ -8,7 +8,7 @@ struct ContentView: View {
     
     var body: some View {
         let _ = LabLog.event("ContentView body")
-        Stage11DeepLinkingView()
+        Stage12NavigationRestorationView()
             .onAppear {
                 LabLog.event("ContentView onAppear")
             }
@@ -676,7 +676,7 @@ enum LabLog {
     }
 }
 
-#Preview("Stage 11 deep linking") {
+#Preview("Stage 12 navigation restoration") {
     ContentView()
         .environment(AppRouter())
         .environment(AppUIState())
