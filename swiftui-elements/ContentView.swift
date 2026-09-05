@@ -8,7 +8,7 @@ struct ContentView: View {
     
     var body: some View {
         let _ = LabLog.event("ContentView body")
-        Stage12NavigationRestorationView()
+        Stage13ListProductionScaleView()
             .onAppear {
                 LabLog.event("ContentView onAppear")
             }
@@ -676,7 +676,7 @@ enum LabLog {
     }
 }
 
-#Preview("Stage 12 navigation restoration") {
+#Preview("Stage 13 lists at production scale") {
     ContentView()
         .environment(AppRouter())
         .environment(AppUIState())
