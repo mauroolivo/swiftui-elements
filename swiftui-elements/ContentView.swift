@@ -7,7 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Stage14LoadingStateModelingView()
+        Stage15SwiftConcurrencyLifecycleView()
     }
 }
 
@@ -669,7 +669,7 @@ enum LabLog {
     }
 }
 
-#Preview("Stage 13 lists at production scale") {
+#Preview("Stage 15 concurrency lifecycle") {
     ContentView()
         .environment(AppRouter())
         .environment(AppUIState())
