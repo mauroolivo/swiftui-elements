@@ -7,7 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Stage15SwiftConcurrencyLifecycleView()
+        Stage16LayoutBeyondStacksView()
     }
 }
 
@@ -669,7 +669,7 @@ enum LabLog {
     }
 }
 
-#Preview("Stage 15 concurrency lifecycle") {
+#Preview("Stage 16 layout beyond stacks") {
     ContentView()
         .environment(AppRouter())
         .environment(AppUIState())
