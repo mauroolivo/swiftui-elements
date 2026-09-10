@@ -7,7 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Stage18PreferenceKeysView()
+        Stage19ReusableComponentArchitectureView()
     }
 }
 
