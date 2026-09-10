@@ -7,7 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Stage17GeometryAndCoordinateSpacesView()
+        Stage18PreferenceKeysView()
     }
 }
 
@@ -669,7 +669,7 @@ enum LabLog {
     }
 }
 
-#Preview("Stage 16 layout beyond stacks") {
+#Preview("Stage 18 preference keys") {
     ContentView()
         .environment(AppRouter())
         .environment(AppUIState())
