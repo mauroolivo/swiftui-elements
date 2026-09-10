@@ -7,7 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Stage19ReusableComponentArchitectureView()
+        Stage20ViewModifierStylesEnvironmentView()
     }
 }
 
