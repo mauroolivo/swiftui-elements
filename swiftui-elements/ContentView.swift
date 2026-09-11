@@ -7,7 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Stage20ViewModifierStylesEnvironmentView()
+        Stage21AnimationsTransactionsView()
     }
 }
 
