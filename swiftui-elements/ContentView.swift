@@ -7,7 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Stage21AnimationsTransactionsView()
+        Stage22TransitionsMatchedGeometryView()
     }
 }
 
