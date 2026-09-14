@@ -7,7 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Stage23ScrollSystemsView()
+        Stage24UIKitInsideSwiftUIView()
     }
 }
 
