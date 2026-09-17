@@ -7,7 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Stage24UIKitInsideSwiftUIView()
+        Stage25SwiftUIInsideUIKitView()
     }
 }
 
@@ -669,7 +669,7 @@ enum LabLog {
     }
 }
 
-#Preview("Stage 18 preference keys") {
+#Preview("Stage 25 UIKit host") {
     ContentView()
         .environment(AppRouter())
         .environment(AppUIState())
@@ -677,7 +677,7 @@ enum LabLog {
         .environment(\.itemRepository, PreviewItemRepository())
 }
 
-#Preview("Signed out") {
+#Preview("Stage 25 signed out") {
     ContentView()
         .environment(AppRouter())
         .environment(AppUIState())
