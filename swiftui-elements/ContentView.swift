@@ -7,7 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Stage27MigratingAppLifecycleView()
+        Stage28ObservationSharedBetweenUIKitAndSwiftUIView()
     }
 }
 
