@@ -7,7 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Stage30SearchArchitectureView()
+        Stage31ErrorPresentationView()
     }
 }
 
