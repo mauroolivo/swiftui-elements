@@ -1,5 +1,6 @@
 //
 
+import SwiftData
 import SwiftUI
 
 @main
@@ -21,6 +22,7 @@ struct swiftui_elementsApp: App {
                 .environment(appUIState)
                 .environment(session)
                 .environment(\.itemRepository, itemRepository)
+                .modelContainer(for: [Stage32FavoriteRecord.self])
                 .onOpenURL { url in
                     LabLog.event("swiftui_elementsApp received URL: \(url)")
                 }

@@ -7,7 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Stage31ErrorPresentationView()
+        Stage32PersistenceAndSwiftDataView()
     }
 }
 
