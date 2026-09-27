@@ -7,7 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Stage28ObservationSharedBetweenUIKitAndSwiftUIView()
+        Stage29FormsAndEditingArchitectureView()
     }
 }
 
