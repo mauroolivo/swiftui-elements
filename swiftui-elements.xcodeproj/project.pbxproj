@@ -10,12 +10,28 @@
 		34A60EEF304319380021AC8C /* SWIFTUI_ADVANCED_COURSE_PROMPT.md in Resources */ = {isa = PBXBuildFile; fileRef = 34A60EEE304319380021AC8C /* SWIFTUI_ADVANCED_COURSE_PROMPT.md */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		341C9557306AC12E0023B443 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 34A60ED8304319090021AC8C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 34A60EDF304319090021AC8C;
+			remoteInfo = "swiftui-elements";
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		341C9551306AC12E0023B443 /* swiftui-elementsUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swiftui-elementsUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		34A60EE0304319090021AC8C /* swiftui-elements.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "swiftui-elements.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		34A60EEE304319380021AC8C /* SWIFTUI_ADVANCED_COURSE_PROMPT.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = SWIFTUI_ADVANCED_COURSE_PROMPT.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		341C9552306AC12E0023B443 /* swiftui-elementsUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "swiftui-elementsUITests";
+			sourceTree = "<group>";
+		};
 		34A60EE2304319090021AC8C /* swiftui-elements */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "swiftui-elements";
@@ -24,6 +40,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		341C954E306AC12E0023B443 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		34A60EDD304319090021AC8C /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -39,6 +62,7 @@
 			children = (
 				34A60EEE304319380021AC8C /* SWIFTUI_ADVANCED_COURSE_PROMPT.md */,
 				34A60EE2304319090021AC8C /* swiftui-elements */,
+				341C9552306AC12E0023B443 /* swiftui-elementsUITests */,
 				34A60EE1304319090021AC8C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -47,6 +71,7 @@
 			isa = PBXGroup;
 			children = (
 				34A60EE0304319090021AC8C /* swiftui-elements.app */,
+				341C9551306AC12E0023B443 /* swiftui-elementsUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -54,6 +79,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		341C9550306AC12E0023B443 /* swiftui-elementsUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 341C9559306AC12E0023B443 /* Build configuration list for PBXNativeTarget "swiftui-elementsUITests" */;
+			buildPhases = (
+				341C954D306AC12E0023B443 /* Sources */,
+				341C954E306AC12E0023B443 /* Frameworks */,
+				341C954F306AC12E0023B443 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				341C9558306AC12E0023B443 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				341C9552306AC12E0023B443 /* swiftui-elementsUITests */,
+			);
+			name = "swiftui-elementsUITests";
+			packageProductDependencies = (
+			);
+			productName = "swiftui-elementsUITests";
+			productReference = 341C9551306AC12E0023B443 /* swiftui-elementsUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		34A60EDF304319090021AC8C /* swiftui-elements */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 34A60EEB3043190A0021AC8C /* Build configuration list for PBXNativeTarget "swiftui-elements" */;
@@ -86,6 +134,10 @@
 				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
+					341C9550306AC12E0023B443 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = 34A60EDF304319090021AC8C;
+					};
 					34A60EDF304319090021AC8C = {
 						CreatedOnToolsVersion = 26.6;
 					};
@@ -106,11 +158,19 @@
 			projectRoot = "";
 			targets = (
 				34A60EDF304319090021AC8C /* swiftui-elements */,
+				341C9550306AC12E0023B443 /* swiftui-elementsUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		341C954F306AC12E0023B443 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		34A60EDE304319090021AC8C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -122,6 +182,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		341C954D306AC12E0023B443 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		34A60EDC304319090021AC8C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -131,7 +198,55 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		341C9558306AC12E0023B443 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 34A60EDF304319090021AC8C /* swiftui-elements */;
+			targetProxy = 341C9557306AC12E0023B443 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		341C955A306AC12E0023B443 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Q7Q64FDMLV;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.mauroolivo.swiftui-elementsUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "swiftui-elements";
+			};
+			name = Debug;
+		};
+		341C955B306AC12E0023B443 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Q7Q64FDMLV;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.mauroolivo.swiftui-elementsUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "swiftui-elements";
+			};
+			name = Release;
+		};
 		34A60EE93043190A0021AC8C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -320,6 +435,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		341C9559306AC12E0023B443 /* Build configuration list for PBXNativeTarget "swiftui-elementsUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				341C955A306AC12E0023B443 /* Debug */,
+				341C955B306AC12E0023B443 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		34A60EDB304319090021AC8C /* Build configuration list for PBXProject "swiftui-elements" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
