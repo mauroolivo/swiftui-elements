@@ -7,7 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Stage39PreviewDrivenDevelopmentView()
+        Stage40ArchitectureEvaluationView()
     }
 }
 
