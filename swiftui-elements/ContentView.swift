@@ -7,7 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Stage45SceneAndMultiWindowView()
+        Stage46AdvancedUIKitMigrationView()
     }
 }
 
