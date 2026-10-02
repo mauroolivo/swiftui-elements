@@ -7,7 +7,7 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Stage44TabsIndependentFeatureStateView()
+        Stage45SceneAndMultiWindowView()
     }
 }
 
@@ -669,7 +669,7 @@ enum LabLog {
     }
 }
 
-#Preview("Stage 25 UIKit host") {
+#Preview("Stage 45 scene lab") {
     ContentView()
         .environment(AppRouter())
         .environment(AppUIState())
@@ -677,7 +677,7 @@ enum LabLog {
         .environment(\.itemRepository, PreviewItemRepository())
 }
 
-#Preview("Stage 25 signed out") {
+#Preview("Stage 45 signed out") {
     ContentView()
         .environment(AppRouter())
         .environment(AppUIState())
